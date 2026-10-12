@@ -77,7 +77,7 @@ The **Chat** tab embeds the full Hermes TUI (the same interface you get from `he
 
 **How it works:**
 
-- `/api/pty` opens a WebSocket authenticated with the dashboard's session token
+- `/api/pty` opens a WebSocket authenticated with the process session token in local mode, or a single-use ticket in OAuth gated mode
 - The server spawns `hermes --tui` behind a POSIX pseudo-terminal
 - Keystrokes travel to the PTY; ANSI output streams back to the browser
 - xterm.js's WebGL renderer paints each cell to an integer-pixel grid; mouse tracking (SGR 1006), wide characters (Unicode 11), and box-drawing glyphs all render natively
@@ -186,7 +186,7 @@ Browse, search, and toggle skills and toolsets. Skills are loaded from `~/.herme
 - **Toolsets** — a separate section shows built-in toolsets (file operations, web browsing, etc.) with their active/inactive status, setup requirements, and list of included tools
 
 :::warning Security
-The web dashboard reads and writes your `.env` file, which contains API keys and secrets. It binds to `127.0.0.1` by default — only accessible from your local machine. If you bind to `0.0.0.0`, anyone on your network can view and modify your credentials. The dashboard has no authentication of its own.
+The web dashboard reads and writes your `.env` file, which contains API keys and secrets. It binds to `127.0.0.1` by default and protects private API routes with an ephemeral process session token. Non-loopback binds enable the [OAuth auth gate](#oauth-authentication-gated-mode) unless `--insecure` is explicitly used. A gated bind without a configured provider is rejected at startup. `--insecure` retains the legacy session-token path; it is not a safe public deployment configuration. Use HTTPS and the OAuth gate for public access.
 :::
 
 ## `/reload` Slash Command
@@ -394,7 +394,7 @@ Same precedence as the other dashboard settings — env wins over `config.yaml`:
 
 Validation rejects values without `http://` / `https://` scheme, without a host, or containing quote / angle / whitespace / control characters. A malformed value silently falls through to header reconstruction so the login flow keeps working rather than dispatching the user to a hostile URL.
 
-> **Note:** `public_url` overrides the OAuth callback URL only. The `Secure` cookie flag is still controlled by `request.url.scheme` (X-Forwarded-Proto under proxy_headers), so an `http://` `public_url` on a TLS-terminated public deploy will produce non-Secure cookies. This is an operator footgun — pair `public_url` with proper TLS termination upstream.
+> **Note:** `public_url` overrides the OAuth callback URL only. The `Secure` cookie flag is still controlled by `request.url.scheme` (X-Forwarded-Proto under proxy_headers), so an `https://` `public_url` does not force Secure cookies if the request scheme still appears as HTTP. This is an operator footgun — pair `public_url` with proper TLS termination upstream.
 
 ### OAuth flow
 
@@ -421,7 +421,7 @@ All three are `Path=/` and `SameSite=Lax`. The `Secure` flag is set when the das
 
 ### Logout
 
-The sidebar widget shows `Logged in as <user_id…> via nous` with a logout icon. Clicking it POSTs `/auth/logout`, which clears all dashboard-auth cookies and redirects back to `/login`.
+The sidebar widget shows `Logged in as <user_id…> via nous` with a logout icon. Clicking it POSTs `/auth/logout`, which clears all dashboard-auth cookies and redirects back to `/login`. The bundled Nous contract-v1 provider has no revocation endpoint; deleting browser cookies does not revoke a copied access token, which remains usable until expiry. OAuth dashboard sessions are separate from AI-provider credentials stored in `auth.json`.
 
 ### Audit log
 
